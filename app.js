@@ -384,9 +384,13 @@ function pickPopularityAvoiding() {
 }
 
 function renderPick(containerId, result) {
+  // Only show what you'd actually write on a real ticket: your 6 main
+  // numbers, plus your Powerball number if you're playing that add-on.
+  // The Bonus Ball isn't something you pick -- it's drawn separately by
+  // the machine and checked against these same 6 numbers, so showing it
+  // as a 7th ball here would be misleading.
   const el = $(containerId);
   el.innerHTML = result.nums.map(n => `<div class="gen-ball">${n}</div>`).join('')
-    + `<div class="gen-ball bonus">${result.bonus}</div>`
     + `<div class="gen-ball power">${result.powerball}</div>`;
 }
 
