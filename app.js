@@ -338,12 +338,12 @@ function pickTrueRandom() {
 }
 
 function pickWeighted() {
-  const { freq, pbFreqOld, pbFreqNew } = computeStats(draws);
+  const { freq, bonusFreq, pbFreqOld, pbFreqNew } = computeStats(draws);
   const weights = freq.map(f => f + 1);
   const pool = Array.from({ length: POOL_SIZE }, (_, i) => i + 1);
   const picked = weightedSampleWithoutReplacement(pool, n => weights[n], PICK_COUNT).sort((a, b) => a - b);
   const remainingPool = pool.filter(n => !picked.includes(n));
-  const bonus = remainingPool[Math.floor(Math.random() * remainingPool.length)];
+  const bonus = weightedSampleWithoutReplacement(remainingPool, n => bonusFreq[n] + 1, 1)[0];
 
   const pbPool = currentPbPoolSize();
   const pbFreq = pbPool === PB_POOL_NEW ? pbFreqNew : pbFreqOld;
@@ -491,8 +491,13 @@ function renderStats() {
       ball.textContent = n;
       pbField.appendChild(ball);
     }
+    const pbRanked = pbFreq.map((count, n) => ({ n, count })).slice(1, pbPool + 1).sort((a, b) => b.count - a.count);
+    $('pb-hot-list').innerHTML = pbRanked.slice(0, 6).map(r => `<div class="chip hot">${r.n}</div>`).join('');
+    $('pb-cold-list').innerHTML = pbRanked.slice(-6).reverse().map(r => `<div class="chip cold">${r.n}</div>`).join('');
   } else {
     pbField.innerHTML = `<p class="input-help">No Powerball numbers for the ${usingNewPool ? '14-ball (current)' : '10-ball (pre-Sep-2026)'} era in your loaded draws yet.</p>`;
+    $('pb-hot-list').innerHTML = '';
+    $('pb-cold-list').innerHTML = '';
   }
 }
 
