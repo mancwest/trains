@@ -160,6 +160,7 @@ function escapeHtml(s) {
 
 function computeStats(drawList) {
   const freq = Array(POOL_SIZE + 1).fill(0);
+  const bonusFreq = Array(POOL_SIZE + 1).fill(0);
   const pairCounts = new Map();
   const pbFreqOld = Array(PB_POOL_OLD + 1).fill(0);
   const pbFreqNew = Array(PB_POOL_NEW + 1).fill(0);
@@ -167,6 +168,7 @@ function computeStats(drawList) {
 
   drawList.forEach(d => {
     d.nums.forEach(n => { if (n >= 1 && n <= POOL_SIZE) freq[n]++; });
+    if (d.bonus && d.bonus >= 1 && d.bonus <= POOL_SIZE) bonusFreq[d.bonus]++;
     for (let a = 0; a < d.nums.length; a++) {
       for (let b = a + 1; b < d.nums.length; b++) {
         const key = [d.nums[a], d.nums[b]].sort((x, y) => x - y).join('-');
@@ -180,7 +182,7 @@ function computeStats(drawList) {
     }
   });
 
-  return { freq, pairCounts, pbFreqOld, pbFreqNew, pbOldCount, pbNewCount };
+  return { freq, bonusFreq, pairCounts, pbFreqOld, pbFreqNew, pbOldCount, pbNewCount };
 }
 
 // ===================== Chi-square goodness-of-fit ===================== //
@@ -425,7 +427,7 @@ function renderStats() {
   }
   $('stats-section').style.display = '';
 
-  const { freq, pairCounts, pbFreqOld, pbFreqNew, pbOldCount, pbNewCount } = computeStats(draws);
+  const { freq, bonusFreq, pairCounts, pbFreqOld, pbFreqNew, pbOldCount, pbNewCount } = computeStats(draws);
   const maxFreq = Math.max(...freq.slice(1));
 
   const field = $('ball-field');
@@ -451,6 +453,24 @@ function renderStats() {
     const [a, b] = key.split('-');
     return `<div class="pair-row"><span class="pair-nums">${a} — ${b}</span><span class="pair-count">${count} draws together</span></div>`;
   }).join('') || '<p class="input-help">Not enough draws yet to find repeat pairings.</p>';
+
+  const maxBonusFreq = Math.max(...bonusFreq.slice(1));
+  const bonusField = $('bonus-field');
+  bonusField.innerHTML = '';
+  for (let n = 1; n <= POOL_SIZE; n++) {
+    const ball = document.createElement('div');
+    ball.className = 'ball';
+    const intensity = maxBonusFreq ? bonusFreq[n] / maxBonusFreq : 0;
+    ball.style.background = `rgba(76,122,115,${0.08 + intensity * 0.55})`;
+    ball.style.borderColor = `rgba(76,122,115,${0.2 + intensity * 0.6})`;
+    ball.style.color = intensity > 0.4 ? '#0D1F19' : 'rgba(242,238,225,0.6)';
+    ball.style.fontWeight = intensity > 0.4 ? '600' : '500';
+    ball.textContent = n;
+    bonusField.appendChild(ball);
+  }
+  const bonusRanked = bonusFreq.map((count, n) => ({ n, count })).slice(1).sort((a, b) => b.count - a.count);
+  $('bonus-hot-list').innerHTML = bonusRanked.slice(0, 6).map(r => `<div class="chip hot">${r.n}</div>`).join('');
+  $('bonus-cold-list').innerHTML = bonusRanked.slice(-6).reverse().map(r => `<div class="chip cold">${r.n}</div>`).join('');
 
   const usingNewPool = currentPbPoolSize() === PB_POOL_NEW;
   const pbFreq = usingNewPool ? pbFreqNew : pbFreqOld;
