@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en-NZ">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lotto Number Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+
+  <p class="kicker">NZ LOTTO + POWERBALL · STATISTICS &amp; EXPECTED VALUE</p>
+  <h1>Lotto Number Lab —<br><em>patterns</em>, not predictions.</h1>
+  <p class="lede">A real toolkit for NZ Lotto: historical stats, a randomness audit, a prize-splitting-avoidance generator, and an honest expected-value calculator.</p>
+
+  <div class="honesty">
+    <strong>The honest bit:</strong> each Lotto and Powerball draw is independent and random, using an independently audited machine with no memory. No formula, streak, or "overdue number" theory improves your odds — every combination has exactly the same chance, every time. The tools below are genuinely useful for exploring history, checking the draw looks statistically fair, and understanding what a ticket is actually worth — not for predicting outcomes.
+  </div>
+
+  <section id="data-section">
+    <div class="section-head">
+      <h2>Dataset</h2>
+      <span class="hint" id="data-hint">loading…</span>
+    </div>
+    <div class="meta-bar" id="data-meta"></div>
+    <p class="input-help" id="data-status"></p>
+
+    <details class="manual-entry">
+      <summary>Paste or add draws manually</summary>
+      <textarea id="draw-input" placeholder="One draw per line: 6 main numbers, then optionally a bonus ball, then a Powerball number.&#10;&#10;3, 11, 19, 24, 31, 38&#10;3, 11, 19, 24, 31, 38; 9&#10;3, 11, 19, 24, 31, 38; 9; 5"></textarea>
+      <p class="input-help">Format per line: <em>main numbers</em> ; <em>bonus</em> ; <em>powerball</em> — bonus/powerball optional. This replaces the loaded dataset for this session.</p>
+      <div class="row">
+        <button class="primary" id="load-btn">Use pasted draws</button>
+        <button id="reload-btn">Reload CSV dataset</button>
+      </div>
+    </details>
+  </section>
+
+  <section id="stats-section" style="display:none;">
+    <div class="section-head">
+      <h2>Frequency field</h2>
+      <span class="hint">size + fill = draw count</span>
+    </div>
+    <div class="ball-field" id="ball-field"></div>
+
+    <div class="lists">
+      <div>
+        <div class="list-title hot">Most frequent</div>
+        <div class="chip-row" id="hot-list"></div>
+      </div>
+      <div>
+        <div class="list-title cold">Least frequent</div>
+        <div class="chip-row" id="cold-list"></div>
+      </div>
+    </div>
+
+    <div class="pairs">
+      <div class="section-head">
+        <h2>Common pairings</h2>
+        <span class="hint">numbers drawn together most</span>
+      </div>
+      <div id="pair-list"></div>
+    </div>
+
+    <div class="section-head" style="margin-top:26px;">
+      <h2>Powerball frequency</h2>
+      <span class="hint" id="pb-hint">1–10 · separate draw</span>
+    </div>
+    <div class="pb-field" id="pb-field"></div>
+  </section>
+
+  <section id="audit-section" style="display:none;">
+    <div class="section-head">
+      <h2>Randomness audit</h2>
+      <span class="hint">chi-square goodness-of-fit</span>
+    </div>
+    <p class="input-help">Tests whether the loaded draws look statistically consistent with a fair, uniform random draw. This is real statistics, not a "hot numbers" gimmick — but small sample sizes mean it has limited power to detect anything even if it existed. Treat it as a sanity check, not proof of anything.</p>
+    <div class="audit-grid" id="audit-grid"></div>
+  </section>
+
+  <section id="gen-section">
+    <div class="section-head">
+      <h2>Quick pick</h2>
+      <span class="hint">for fun — all equally "correct"</span>
+    </div>
+    <div class="gen-grid">
+      <div class="gen-card">
+        <h3>True random</h3>
+        <p>Every number gets an equal shot — mathematically identical to the real draw.</p>
+        <div class="gen-balls" id="random-balls"></div>
+        <button id="random-btn">Generate</button>
+      </div>
+      <div class="gen-card">
+        <h3>Frequency-weighted</h3>
+        <p>Leans toward numbers common in your loaded history. Doesn't raise your odds — draws have no memory.</p>
+        <div class="gen-balls" id="weighted-balls"></div>
+        <button id="weighted-btn" disabled>Load draws first</button>
+      </div>
+      <div class="gen-card">
+        <h3>Popularity-avoiding</h3>
+        <p>Leans away from numbers <em>other players</em> tend to pick (birthdays, slip patterns). Same odds of winning — bigger share if you do.</p>
+        <div class="gen-balls" id="popavoid-balls"></div>
+        <button id="popavoid-btn">Generate</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="ev-section">
+    <div class="section-head">
+      <h2>Odds &amp; expected value</h2>
+      <span class="hint">real published numbers</span>
+    </div>
+
+    <table class="odds-table" id="odds-table"></table>
+    <p class="input-help" id="odds-note"></p>
+
+    <div class="ev-calc">
+      <div class="ev-field">
+        <label for="ev-lines">Lines on your ticket</label>
+        <input type="number" id="ev-lines" value="10" min="1" max="1000">
+      </div>
+      <div class="ev-field">
+        <label for="ev-price">Ticket price (NZ$)</label>
+        <input type="number" id="ev-price" value="7.70" min="0" step="0.10">
+      </div>
+      <div class="ev-field">
+        <label for="ev-jackpot">Division 1 jackpot (NZ$)</label>
+        <input type="number" id="ev-jackpot" value="1000000" min="0" step="100000">
+      </div>
+      <div class="ev-field checkbox-field">
+        <label><input type="checkbox" id="ev-powerball"> Playing Powerball</label>
+      </div>
+    </div>
+    <button class="primary" id="ev-btn">Calculate</button>
+    <div id="ev-result"></div>
+  </section>
+
+  <footer>
+    Built for exploring real historical draw data. Past frequency has no bearing on future draws — please play within your means. If gambling stops being fun, free 24/7 support: Gambling Helpline 0800 654 655, or <a href="https://www.safergambling.org.nz" target="_blank" rel="noopener">safergambling.org.nz</a>.
+  </footer>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
