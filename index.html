@@ -156,17 +156,29 @@
     </div>
     <div class="ev-calc">
       <div class="ev-field">
-        <label for="wheel-mode">Goal</label>
-        <select id="wheel-mode">
-          <option value="full">Full coverage — guarantee every 3-number combo from my pool</option>
-          <option value="budget">Limited budget — just use my line count, show me the coverage</option>
+        <label for="wheel-guarantee">Guarantee level</label>
+        <select id="wheel-guarantee">
+          <option value="3" selected>3 numbers together (efficient)</option>
+          <option value="4">4 numbers together (more lines)</option>
+          <option value="5">5 numbers together (many more lines)</option>
+          <option value="6">6 numbers together = the jackpot combo (no shortcut exists)</option>
         </select>
       </div>
       <div class="ev-field">
-        <label for="wheel-max-lines">Max lines</label>
-        <input type="number" id="wheel-max-lines" value="20" min="1" max="300">
+        <label for="wheel-mode">Goal</label>
+        <select id="wheel-mode">
+          <option value="full">Full coverage — guarantee every combo at this level</option>
+          <option value="budget">Limited budget — just use my line count, show me the coverage</option>
+        </select>
       </div>
     </div>
+    <div class="ev-calc">
+      <div class="ev-field">
+        <label for="wheel-max-lines">Max lines</label>
+        <input type="number" id="wheel-max-lines" value="20" min="1" max="2000">
+      </div>
+    </div>
+    <p class="input-help" id="wheel-estimate"></p>
     <button class="primary" id="wheel-btn">Generate wheel</button>
     <div id="wheel-result"></div>
   </section>
@@ -206,6 +218,6 @@
   </footer>
 </div>
 
-<script src="app.js?v=5"></script>
+<script src="app.js?v=6"></script>
 </body>
 </html>

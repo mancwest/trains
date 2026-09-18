@@ -417,19 +417,35 @@ function combinations(arr, k) {
   return results;
 }
 
-function tripleKey(a, b, c) { return `${a}-${b}-${c}`; }
+function subsetKey(subset) { return subset.join('-'); }
 
-function generateWheel(pool, maxLines) {
+function estimateLinesForFullCoverage(K, t) {
+  // Exact when t=6 (no reduction is mathematically possible -- see chat).
+  // A rough LOWER BOUND for t<6 (greedy will typically need somewhat more
+  // than this due to unavoidable overlap; it is not a guaranteed exact figure).
+  const combos = (n, k) => {
+    if (k < 0 || k > n) return 0;
+    let result = 1;
+    for (let i = 0; i < k; i++) result = result * (n - i) / (i + 1);
+    return Math.round(result);
+  };
+  const totalSubsets = combos(K, t);
+  const perLine = combos(6, t);
+  return Math.ceil(totalSubsets / perLine);
+}
+
+function generateWheel(pool, t, maxLines) {
   const K = pool.length;
   if (K < 6) throw new Error('Pool must have at least 6 numbers.');
+  if (t < 3 || t > 6) throw new Error('Guarantee level must be between 3 and 6.');
 
   const sortedPool = [...pool].sort((a, b) => a - b);
-  const allTriples = combinations(sortedPool, 3);
-  const totalTriples = allTriples.length;
-  const uncovered = new Set(allTriples.map(t => tripleKey(...t)));
+  const allSubsets = combinations(sortedPool, t);
+  const totalSubsets = allSubsets.length;
+  const uncovered = new Set(allSubsets.map(subsetKey));
 
   const candidateLines = combinations(sortedPool, 6);
-  const candidateTriples = candidateLines.map(line => combinations(line, 3).map(t => tripleKey(...t)));
+  const candidateSubsets = candidateLines.map(line => combinations(line, t).map(subsetKey));
 
   const chosenLines = [];
   const usedCandidateIdx = new Set();
@@ -439,7 +455,7 @@ function generateWheel(pool, maxLines) {
     for (let i = 0; i < candidateLines.length; i++) {
       if (usedCandidateIdx.has(i)) continue;
       let gain = 0;
-      for (const key of candidateTriples[i]) {
+      for (const key of candidateSubsets[i]) {
         if (uncovered.has(key)) gain++;
       }
       if (gain > bestGain) { bestGain = gain; bestIdx = i; }
@@ -447,22 +463,38 @@ function generateWheel(pool, maxLines) {
     if (bestIdx === -1 || bestGain === 0) break;
     chosenLines.push(candidateLines[bestIdx]);
     usedCandidateIdx.add(bestIdx);
-    for (const key of candidateTriples[bestIdx]) uncovered.delete(key);
+    for (const key of candidateSubsets[bestIdx]) uncovered.delete(key);
   }
 
-  const triplesCovered = totalTriples - uncovered.size;
+  const subsetsCovered = totalSubsets - uncovered.size;
   return {
     lines: chosenLines,
-    totalTriples,
-    triplesCovered,
-    coveragePct: totalTriples === 0 ? 100 : (triplesCovered / totalTriples) * 100,
+    totalSubsets,
+    subsetsCovered,
+    coveragePct: totalSubsets === 0 ? 100 : (subsetsCovered / totalSubsets) * 100,
     fullyCovered: uncovered.size === 0,
   };
+}
+
+function updateWheelEstimate() {
+  const poolInput = $('wheel-pool').value;
+  const t = parseInt($('wheel-guarantee').value, 10);
+  const rawNums = poolInput.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+  const pool = [...new Set(rawNums)].filter(n => n >= 1 && n <= 40);
+  const estimateEl = $('wheel-estimate');
+  if (pool.length < 6 || pool.length > 20) {
+    estimateEl.textContent = '';
+    return;
+  }
+  const est = estimateLinesForFullCoverage(pool.length, t);
+  const exact = t === 6 ? ' (exact -- no reduction is mathematically possible at this level)' : ' (rough lower bound -- the actual algorithm will typically need somewhat more)';
+  estimateEl.textContent = `Pool of ${pool.length}, guarantee level ${t}: full coverage needs roughly ${est} line${est === 1 ? '' : 's'}${exact}.`;
 }
 
 function renderWheelResult() {
   const poolInput = $('wheel-pool').value;
   const mode = $('wheel-mode').value;
+  const t = parseInt($('wheel-guarantee').value, 10);
   const maxLinesRaw = parseInt($('wheel-max-lines').value, 10);
   const resultEl = $('wheel-result');
 
@@ -477,19 +509,16 @@ function renderWheelResult() {
     resultEl.innerHTML = '<p class="input-help">Please use 20 numbers or fewer -- full coverage grows fast, and this keeps generation to a few seconds.</p>';
     return;
   }
-  const maxLines = Math.min(300, Math.max(1, isNaN(maxLinesRaw) ? 20 : maxLinesRaw));
+  const maxLines = Math.min(2000, Math.max(1, isNaN(maxLinesRaw) ? 20 : maxLinesRaw));
 
   $('wheel-btn').disabled = true;
   $('wheel-btn').textContent = 'Generating…';
-  resultEl.innerHTML = '<p class="input-help">Working through the covering design -- this can take a few seconds for larger pools.</p>';
+  resultEl.innerHTML = '<p class="input-help">Working through the covering design -- this can take a few seconds for larger pools or higher guarantee levels.</p>';
 
-  // Let the "Generating…" state actually paint before the synchronous
-  // combinatorics work blocks the thread.
   setTimeout(() => {
     let wheel;
     try {
-      const budget = mode === 'full' ? maxLines : maxLines;
-      wheel = generateWheel(pool, budget);
+      wheel = generateWheel(pool, t, maxLines);
     } catch (err) {
       resultEl.innerHTML = `<p class="input-help">${escapeHtml(String(err.message))}</p>`;
       $('wheel-btn').disabled = false;
@@ -497,9 +526,13 @@ function renderWheelResult() {
       return;
     }
 
+    const guaranteeText = t === 6
+      ? `any winning combination made up entirely of numbers from your pool of ${pool.length} is guaranteed to be one of your lines`
+      : `any ${t} of the real winning numbers, if they land inside your pool of ${pool.length}, are guaranteed to appear together on at least one of your lines`;
+
     const summary = wheel.fullyCovered
-      ? `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · 100% coverage — any 3 numbers from your pool of ${pool.length} are guaranteed to appear together in at least one line.`
-      : `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · ${wheel.coveragePct.toFixed(1)}% coverage (${wheel.triplesCovered}/${wheel.totalTriples} of all possible 3-number combos from your pool) — your line budget wasn't enough for full coverage at this pool size.`;
+      ? `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · 100% coverage — ${guaranteeText}.`
+      : `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · ${wheel.coveragePct.toFixed(1)}% coverage (${wheel.subsetsCovered}/${wheel.totalSubsets} of all possible ${t}-number combos from your pool) — your line budget wasn't enough for full coverage at this pool size and guarantee level.`;
 
     const linesHtml = wheel.lines.map((line, i) =>
       `<div class="wheel-line"><span class="wheel-line-label">Line ${i + 1}</span>${line.map(n => `<div class="gen-ball">${n}</div>`).join('')}</div>`
@@ -512,7 +545,7 @@ function renderWheelResult() {
         Reminder: this guarantees coverage of numbers <em>within your chosen pool</em> across your own lines
         — it does not change the odds of any of your numbers actually being drawn, and it says nothing about
         numbers outside your pool. If the real draw's 6 winning numbers don't mostly fall inside the pool you
-        picked, none of this coverage matters.
+        picked, none of this coverage matters.${t === 6 ? ' A guarantee level of 6 is mathematically identical to buying every possible combination from your pool -- there is no cleverness that reduces this line count below C(pool size, 6).' : ''}
       </p>`;
 
     $('wheel-btn').disabled = false;
@@ -751,6 +784,8 @@ $('popavoid-btn').addEventListener('click', () => renderPick('popavoid-balls', p
 
 $('ev-btn').addEventListener('click', renderEvResult);
 $('wheel-btn').addEventListener('click', renderWheelResult);
+$('wheel-pool').addEventListener('input', updateWheelEstimate);
+$('wheel-guarantee').addEventListener('change', updateWheelEstimate);
 
 // ===================== Init ===================== //
 
