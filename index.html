@@ -133,6 +133,44 @@
     </div>
   </section>
 
+  <section id="wheel-section">
+    <div class="section-head">
+      <h2>Wheeling system</h2>
+      <span class="hint">guaranteed coverage, not odds</span>
+    </div>
+    <p class="input-help">
+      Pick a pool of numbers you like (6–20 of them). This generates a set of lines from
+      that pool using a covering-design algorithm, so that if enough of the actual winning
+      numbers land inside your pool, some of your lines are mathematically guaranteed to
+      contain them together — not left to chance across your own tickets. This is the same
+      family of maths Stefan Mandel used, just scaled down to something reasonable rather
+      than millions of tickets. <strong>It does not change your odds of winning the
+      jackpot</strong> — only how well your own multiple lines cover your own chosen numbers.
+    </p>
+
+    <div class="ev-calc" style="grid-template-columns:1fr;">
+      <div class="ev-field">
+        <label for="wheel-pool">Your number pool (comma-separated, 6–20 numbers, 1–40)</label>
+        <input type="text" id="wheel-pool" placeholder="e.g. 3, 7, 12, 15, 19, 22, 25, 29, 33, 38">
+      </div>
+    </div>
+    <div class="ev-calc">
+      <div class="ev-field">
+        <label for="wheel-mode">Goal</label>
+        <select id="wheel-mode">
+          <option value="full">Full coverage — guarantee every 3-number combo from my pool</option>
+          <option value="budget">Limited budget — just use my line count, show me the coverage</option>
+        </select>
+      </div>
+      <div class="ev-field">
+        <label for="wheel-max-lines">Max lines</label>
+        <input type="number" id="wheel-max-lines" value="20" min="1" max="300">
+      </div>
+    </div>
+    <button class="primary" id="wheel-btn">Generate wheel</button>
+    <div id="wheel-result"></div>
+  </section>
+
   <section id="ev-section">
     <div class="section-head">
       <h2>Odds &amp; expected value</h2>
@@ -168,6 +206,6 @@
   </footer>
 </div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

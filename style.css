@@ -220,6 +220,36 @@ button:disabled{opacity:0.4;cursor:not-allowed;}
 .gen-ball.power{background:var(--power);color:var(--cream);}
 .gen-card button{width:100%;}
 
+.wheel-lines{margin-top:18px;display:flex;flex-direction:column;gap:10px;}
+.wheel-line{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+.wheel-line-label{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:11.5px;
+  color:rgba(242,238,225,0.5);
+  width:52px;
+  flex-shrink:0;
+}
+.wheel-summary{
+  font-family:'IBM Plex Mono',monospace;
+  font-size:13px;
+  color:var(--gold);
+  margin-top:16px;
+  padding:10px 0;
+  border-top:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+}
+select{
+  width:100%;
+  background:var(--bush-deep);
+  border:1px solid var(--line);
+  border-radius:4px;
+  color:var(--cream);
+  font-family:'Inter',sans-serif;
+  font-size:14px;
+  padding:9px 10px;
+}
+select:focus{outline:none;border-color:var(--gold-soft);}
+
 .odds-table{
   width:100%;
   border-collapse:collapse;

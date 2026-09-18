@@ -394,6 +394,132 @@ function renderPick(containerId, result) {
     + `<div class="gen-ball power">${result.powerball}</div>`;
 }
 
+// ===================== Wheeling system (covering-design generator) ===================== //
+// A "wheel" generates several 6-number lines from a chosen pool so that every
+// small sub-combination of the pool is guaranteed to appear together in at
+// least one line -- real combinatorics (the same family Stefan Mandel used),
+// scaled down to a sane number of tickets. Every claim this makes about
+// coverage is independently re-verifiable from the returned lines alone;
+// see the test suite this was built against for that verification.
+
+function combinations(arr, k) {
+  const results = [];
+  const combo = [];
+  function recurse(start) {
+    if (combo.length === k) { results.push([...combo]); return; }
+    for (let i = start; i < arr.length; i++) {
+      combo.push(arr[i]);
+      recurse(i + 1);
+      combo.pop();
+    }
+  }
+  recurse(0);
+  return results;
+}
+
+function tripleKey(a, b, c) { return `${a}-${b}-${c}`; }
+
+function generateWheel(pool, maxLines) {
+  const K = pool.length;
+  if (K < 6) throw new Error('Pool must have at least 6 numbers.');
+
+  const sortedPool = [...pool].sort((a, b) => a - b);
+  const allTriples = combinations(sortedPool, 3);
+  const totalTriples = allTriples.length;
+  const uncovered = new Set(allTriples.map(t => tripleKey(...t)));
+
+  const candidateLines = combinations(sortedPool, 6);
+  const candidateTriples = candidateLines.map(line => combinations(line, 3).map(t => tripleKey(...t)));
+
+  const chosenLines = [];
+  const usedCandidateIdx = new Set();
+
+  while (uncovered.size > 0 && chosenLines.length < maxLines) {
+    let bestIdx = -1, bestGain = -1;
+    for (let i = 0; i < candidateLines.length; i++) {
+      if (usedCandidateIdx.has(i)) continue;
+      let gain = 0;
+      for (const key of candidateTriples[i]) {
+        if (uncovered.has(key)) gain++;
+      }
+      if (gain > bestGain) { bestGain = gain; bestIdx = i; }
+    }
+    if (bestIdx === -1 || bestGain === 0) break;
+    chosenLines.push(candidateLines[bestIdx]);
+    usedCandidateIdx.add(bestIdx);
+    for (const key of candidateTriples[bestIdx]) uncovered.delete(key);
+  }
+
+  const triplesCovered = totalTriples - uncovered.size;
+  return {
+    lines: chosenLines,
+    totalTriples,
+    triplesCovered,
+    coveragePct: totalTriples === 0 ? 100 : (triplesCovered / totalTriples) * 100,
+    fullyCovered: uncovered.size === 0,
+  };
+}
+
+function renderWheelResult() {
+  const poolInput = $('wheel-pool').value;
+  const mode = $('wheel-mode').value;
+  const maxLinesRaw = parseInt($('wheel-max-lines').value, 10);
+  const resultEl = $('wheel-result');
+
+  const rawNums = poolInput.split(',').map(s => parseInt(s.trim(), 10)).filter(n => !isNaN(n));
+  const pool = [...new Set(rawNums)].filter(n => n >= 1 && n <= 40);
+
+  if (pool.length < 6) {
+    resultEl.innerHTML = '<p class="input-help">Enter at least 6 distinct numbers between 1 and 40.</p>';
+    return;
+  }
+  if (pool.length > 20) {
+    resultEl.innerHTML = '<p class="input-help">Please use 20 numbers or fewer -- full coverage grows fast, and this keeps generation to a few seconds.</p>';
+    return;
+  }
+  const maxLines = Math.min(300, Math.max(1, isNaN(maxLinesRaw) ? 20 : maxLinesRaw));
+
+  $('wheel-btn').disabled = true;
+  $('wheel-btn').textContent = 'Generating…';
+  resultEl.innerHTML = '<p class="input-help">Working through the covering design -- this can take a few seconds for larger pools.</p>';
+
+  // Let the "Generating…" state actually paint before the synchronous
+  // combinatorics work blocks the thread.
+  setTimeout(() => {
+    let wheel;
+    try {
+      const budget = mode === 'full' ? maxLines : maxLines;
+      wheel = generateWheel(pool, budget);
+    } catch (err) {
+      resultEl.innerHTML = `<p class="input-help">${escapeHtml(String(err.message))}</p>`;
+      $('wheel-btn').disabled = false;
+      $('wheel-btn').textContent = 'Generate wheel';
+      return;
+    }
+
+    const summary = wheel.fullyCovered
+      ? `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · 100% coverage — any 3 numbers from your pool of ${pool.length} are guaranteed to appear together in at least one line.`
+      : `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · ${wheel.coveragePct.toFixed(1)}% coverage (${wheel.triplesCovered}/${wheel.totalTriples} of all possible 3-number combos from your pool) — your line budget wasn't enough for full coverage at this pool size.`;
+
+    const linesHtml = wheel.lines.map((line, i) =>
+      `<div class="wheel-line"><span class="wheel-line-label">Line ${i + 1}</span>${line.map(n => `<div class="gen-ball">${n}</div>`).join('')}</div>`
+    ).join('');
+
+    resultEl.innerHTML = `
+      <div class="wheel-summary">${summary}</div>
+      <div class="wheel-lines">${linesHtml}</div>
+      <p class="ev-caption">
+        Reminder: this guarantees coverage of numbers <em>within your chosen pool</em> across your own lines
+        — it does not change the odds of any of your numbers actually being drawn, and it says nothing about
+        numbers outside your pool. If the real draw's 6 winning numbers don't mostly fall inside the pool you
+        picked, none of this coverage matters.
+      </p>`;
+
+    $('wheel-btn').disabled = false;
+    $('wheel-btn').textContent = 'Generate wheel';
+  }, 20);
+}
+
 // ===================== Expected value ===================== //
 
 function calculateEV({ lines, ticketPrice, jackpot, includePowerball }) {
@@ -624,6 +750,7 @@ $('weighted-btn').addEventListener('click', () => { if (draws.length > 0) render
 $('popavoid-btn').addEventListener('click', () => renderPick('popavoid-balls', pickPopularityAvoiding()));
 
 $('ev-btn').addEventListener('click', renderEvResult);
+$('wheel-btn').addEventListener('click', renderWheelResult);
 
 // ===================== Init ===================== //
 
