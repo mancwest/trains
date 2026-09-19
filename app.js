@@ -435,6 +435,13 @@ function estimateLinesForFullCoverage(K, t) {
 }
 
 function generateWheel(pool, t, maxLines) {
+  // Incremental-gain greedy set cover: maintains a running "gain" count per
+  // candidate line via an inverted index (subset -> which candidates contain
+  // it), so each pick only updates the candidates actually affected by what
+  // was just covered, instead of rescanning every candidate's full subset
+  // list on every iteration. Mathematically identical guarantee to a naive
+  // full-rescan greedy -- verified to produce identical line counts on the
+  // same inputs -- just far faster at larger pool sizes.
   const K = pool.length;
   if (K < 6) throw new Error('Pool must have at least 6 numbers.');
   if (t < 3 || t > 6) throw new Error('Guarantee level must be between 3 and 6.');
@@ -447,23 +454,35 @@ function generateWheel(pool, t, maxLines) {
   const candidateLines = combinations(sortedPool, 6);
   const candidateSubsets = candidateLines.map(line => combinations(line, t).map(subsetKey));
 
+  const subsetToCandidates = new Map();
+  candidateSubsets.forEach((subsetList, idx) => {
+    subsetList.forEach(key => {
+      if (!subsetToCandidates.has(key)) subsetToCandidates.set(key, []);
+      subsetToCandidates.get(key).push(idx);
+    });
+  });
+
+  const gain = candidateSubsets.map(s => s.length);
+  const used = new Array(candidateLines.length).fill(false);
   const chosenLines = [];
-  const usedCandidateIdx = new Set();
 
   while (uncovered.size > 0 && chosenLines.length < maxLines) {
-    let bestIdx = -1, bestGain = -1;
+    let bestIdx = -1, bestGain = 0;
     for (let i = 0; i < candidateLines.length; i++) {
-      if (usedCandidateIdx.has(i)) continue;
-      let gain = 0;
-      for (const key of candidateSubsets[i]) {
-        if (uncovered.has(key)) gain++;
-      }
-      if (gain > bestGain) { bestGain = gain; bestIdx = i; }
+      if (!used[i] && gain[i] > bestGain) { bestGain = gain[i]; bestIdx = i; }
     }
-    if (bestIdx === -1 || bestGain === 0) break;
+    if (bestIdx === -1) break;
+
     chosenLines.push(candidateLines[bestIdx]);
-    usedCandidateIdx.add(bestIdx);
-    for (const key of candidateSubsets[bestIdx]) uncovered.delete(key);
+    used[bestIdx] = true;
+
+    for (const key of candidateSubsets[bestIdx]) {
+      if (uncovered.has(key)) {
+        uncovered.delete(key);
+        const affected = subsetToCandidates.get(key);
+        if (affected) for (const idx of affected) if (!used[idx]) gain[idx]--;
+      }
+    }
   }
 
   const subsetsCovered = totalSubsets - uncovered.size;
@@ -474,6 +493,12 @@ function generateWheel(pool, t, maxLines) {
     coveragePct: totalSubsets === 0 ? 100 : (subsetsCovered / totalSubsets) * 100,
     fullyCovered: uncovered.size === 0,
   };
+}
+
+function toggleWheelModeFields() {
+  const mode = $('wheel-mode').value;
+  const maxLinesField = $('wheel-max-lines');
+  maxLinesField.disabled = mode === 'full';
 }
 
 function updateWheelEstimate() {
@@ -490,6 +515,8 @@ function updateWheelEstimate() {
   const exact = t === 6 ? ' (exact -- no reduction is mathematically possible at this level)' : ' (rough lower bound -- the actual algorithm will typically need somewhat more)';
   estimateEl.textContent = `Pool of ${pool.length}, guarantee level ${t}: full coverage needs roughly ${est} line${est === 1 ? '' : 's'}${exact}.`;
 }
+
+const FULL_MODE_LINE_CAP = 2000; // safety ceiling; now cheap to reach thanks to the incremental-gain algorithm above
 
 function renderWheelResult() {
   const poolInput = $('wheel-pool').value;
@@ -509,7 +536,23 @@ function renderWheelResult() {
     resultEl.innerHTML = '<p class="input-help">Please use 20 numbers or fewer -- full coverage grows fast, and this keeps generation to a few seconds.</p>';
     return;
   }
-  const maxLines = Math.min(2000, Math.max(1, isNaN(maxLinesRaw) ? 20 : maxLinesRaw));
+  if (pool.length === 6) {
+    resultEl.innerHTML = `
+      <p class="input-help">
+        Your pool has exactly 6 numbers, so there is only one possible line: those same 6 numbers.
+        Wheeling has nothing to distribute across multiple lines at this size -- it's identical to just
+        playing that one ticket normally. Add more numbers to your pool (8+) to see genuine multi-line
+        coverage.
+      </p>
+      <div class="wheel-lines"><div class="wheel-line"><span class="wheel-line-label">Line 1</span>${pool.slice().sort((a,b)=>a-b).map(n => `<div class="gen-ball">${n}</div>`).join('')}</div></div>`;
+    return;
+  }
+
+  // "Full coverage" tries hard for full coverage (up to a safety cap so the
+  // browser can't hang); "Limited budget" respects exactly what you typed.
+  const effectiveMaxLines = mode === 'full'
+    ? FULL_MODE_LINE_CAP
+    : Math.min(2000, Math.max(1, isNaN(maxLinesRaw) ? 20 : maxLinesRaw));
 
   $('wheel-btn').disabled = true;
   $('wheel-btn').textContent = 'Generating…';
@@ -518,7 +561,7 @@ function renderWheelResult() {
   setTimeout(() => {
     let wheel;
     try {
-      wheel = generateWheel(pool, t, maxLines);
+      wheel = generateWheel(pool, t, effectiveMaxLines);
     } catch (err) {
       resultEl.innerHTML = `<p class="input-help">${escapeHtml(String(err.message))}</p>`;
       $('wheel-btn').disabled = false;
@@ -530,9 +573,14 @@ function renderWheelResult() {
       ? `any winning combination made up entirely of numbers from your pool of ${pool.length} is guaranteed to be one of your lines`
       : `any ${t} of the real winning numbers, if they land inside your pool of ${pool.length}, are guaranteed to appear together on at least one of your lines`;
 
+    let capNote = '';
+    if (!wheel.fullyCovered && mode === 'full' && wheel.lines.length === FULL_MODE_LINE_CAP) {
+      capNote = ` Generation stopped at a safety cap of ${FULL_MODE_LINE_CAP} lines to keep this responsive -- full coverage at this pool size and guarantee level would need more than that. Try a smaller pool or a lower guarantee level for a genuine full-coverage result.`;
+    }
+
     const summary = wheel.fullyCovered
       ? `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · 100% coverage — ${guaranteeText}.`
-      : `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · ${wheel.coveragePct.toFixed(1)}% coverage (${wheel.subsetsCovered}/${wheel.totalSubsets} of all possible ${t}-number combos from your pool) — your line budget wasn't enough for full coverage at this pool size and guarantee level.`;
+      : `${wheel.lines.length} line${wheel.lines.length === 1 ? '' : 's'} · ${wheel.coveragePct.toFixed(1)}% coverage (${wheel.subsetsCovered}/${wheel.totalSubsets} of all possible ${t}-number combos from your pool).${capNote}`;
 
     const linesHtml = wheel.lines.map((line, i) =>
       `<div class="wheel-line"><span class="wheel-line-label">Line ${i + 1}</span>${line.map(n => `<div class="gen-ball">${n}</div>`).join('')}</div>`
@@ -786,9 +834,11 @@ $('ev-btn').addEventListener('click', renderEvResult);
 $('wheel-btn').addEventListener('click', renderWheelResult);
 $('wheel-pool').addEventListener('input', updateWheelEstimate);
 $('wheel-guarantee').addEventListener('change', updateWheelEstimate);
+$('wheel-mode').addEventListener('change', toggleWheelModeFields);
 
 // ===================== Init ===================== //
 
+toggleWheelModeFields();
 renderOddsTable();
 renderPick('random-balls', pickTrueRandom());
 renderPick('popavoid-balls', pickPopularityAvoiding());
